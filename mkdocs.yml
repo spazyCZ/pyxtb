@@ -6,6 +6,8 @@ nav:
 
 plugins: 
   - search
+  - privacy
+  - badges
   - mkdocstrings:
       handlers:
         python:
@@ -29,6 +31,8 @@ plugins:
               - "!^_"
               - "!^T$"
               - "^__"
+repo_name: MichalKarol/pyxtb
+repo_url: https://github.com/MichalKarol/pyxtb
 
 theme:
   name: material
