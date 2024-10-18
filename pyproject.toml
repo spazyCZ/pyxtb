@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "pyxtb"
+version = "1.0.0"
+description = "Python wrapper for XTB HTTP API"
+authors = ["Michal Karol <michal.p.karol@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+dataclasses-json = "^0.6.7"
+ruff = "^0.7.0"
+
+[tool.ruff.lint]
+extend-select = ["I"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
