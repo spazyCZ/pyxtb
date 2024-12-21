@@ -73,6 +73,15 @@ CODES = {
 
 
 def handle_error(response: ERROR_RESPONSE):
+    """
+    Handles an error response from the API.
+
+    Args:
+        response (ERROR_RESPONSE): The error response containing error code and description.
+
+    Raises:
+        Exception: Raises an exception with the error description.
+    """
     code = response["errorCode"]
     if code.startswith("SE"):
         raise Exception("Internal error, in case of such error, please contact support")
