@@ -55,7 +55,10 @@ DEFAULT_XAPI_ADDRESS = "xapi.xtb.com"
 
 class Api:
     """
-    Main XTB API connector
+    Main XTB API connector.
+
+    Provides methods to interact with the XTB trading API, including authentication,
+    data retrieval, and real-time streaming of trade information.
 
     Examples:
         >>> async with Api(1000000, "password") as api:
@@ -65,6 +68,9 @@ class Api:
         >>>     print("Opened trades profit")
         >>>     for trade in trades:
         >>>         print(f"{symbol_map[trade.symbol].description}: {trade.profit}")
+    
+    Documentation:
+        For more details, refer to the [XTB API Documentation](http://developers.xstore.pro/documentation/#overview).
     """
 
     @dataclass
@@ -105,10 +111,20 @@ class Api:
         self._connection_info = Api._DEMO if demo else Api._REAL
 
     async def __aenter__(self):
+        """
+        Asynchronous context manager entry.
+
+        Logs into the API when entering the context.
+        """
         await self.login()
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
+        """
+        Asynchronous context manager exit.
+
+        Logs out of the API and closes connections when exiting the context.
+        """
         if self._logged_in:
             await self.logout()
         for stream in [
@@ -127,11 +143,28 @@ class Api:
         return False
 
     async def _write_(self, writer: StreamWriter | None, data: str):
+        """
+        Writes data to the specified stream writer.
+
+        Args:
+            writer (StreamWriter | None): The stream writer to write data to.
+            data (str): The data to write.
+        """
         if not self._writer:
             raise Exception("Writer not set up")
         writer.write(data.encode())
 
     async def _read_(self, reader: StreamReader | None, buffer_size=4096) -> str:
+        """
+        Reads data from the specified stream reader.
+
+        Args:
+            reader (StreamReader | None): The stream reader to read data from.
+            buffer_size (int, optional): The buffer size for reading data. Defaults to 4096.
+
+        Returns:
+            str: The read data as a string.
+        """
         if not reader:
             raise Exception("Reader not set up")
         data = bytearray()
@@ -144,6 +177,16 @@ class Api:
         return data.decode().strip()
 
     async def _read_command_(self, reader: StreamReader | None, raw: bool = False):
+        """
+        Reads a command response from the specified stream reader.
+
+        Args:
+            reader (StreamReader | None): The stream reader to read data from.
+            raw (bool, optional): Whether to return raw data. Defaults to False.
+
+        Returns:
+            Parsed response data or raw data based on the provided flag.
+        """
         data = await self._read_(reader)
         if len(data) > 0:
             parsed_data: RESPONSE[T] = json.loads(data)
@@ -163,6 +206,15 @@ class Api:
         unauthenticated: bool = False,
         **kwargs: dict[dict],
     ):
+        """
+        Sends a command to the API.
+
+        Args:
+            writer (StreamWriter | None): The stream writer to send data to.
+            command (str): The command to send.
+            unauthenticated (bool, optional): Whether the command requires authentication. Defaults to False.
+            **kwargs: Additional keyword arguments for the command.
+        """
         if not unauthenticated and not self._logged_in:
             raise Exception("Not logged in")
 
@@ -177,6 +229,11 @@ class Api:
         )
 
     async def _stream_read_(self):
+        """
+        Reads streaming data from the API and triggers callbacks.
+
+        Continuously reads data from the streaming reader and triggers registered callbacks.
+        """
         while True:
             parsed_data = await self._read_command_(self._streaming_reader, raw=True)
 
@@ -198,10 +255,18 @@ class Api:
                     f"Received command: {command} with data: {parsed_data["data"]}"
                 )
 
-    async def login(
-        self,
-    ):
-        """[http://developers.xstore.pro/documentation/#login](http://developers.xstore.pro/documentation/#login)"""
+    async def login(self):
+        """
+        Authenticate with the XTB API using provided credentials.
+
+        Establishes a connection to the API server and initiates a streaming session.
+
+        Raises:
+            Exception: If authentication fails or connection cannot be established.
+
+        Documentation:
+            [Login Endpoint](http://developers.xstore.pro/documentation/#login)
+        """
         self._reader, self._writer = await asyncio.open_connection(
             self._address, self._connection_info.port, ssl=True
         )
@@ -232,13 +297,34 @@ class Api:
         await self.streaming_ping()
 
     async def logout(self) -> RESPONSE[StreamingTradeStatusRecord]:
-        """[http://developers.xstore.pro/documentation/#logout](http://developers.xstore.pro/documentation/#logout)"""
+        """
+        Terminate the authenticated session with the XTB API.
+
+        Closes active connections and cancels any ongoing streaming tasks.
+
+        Returns:
+            RESPONSE[StreamingTradeStatusRecord]: Response from the logout command.
+
+        Documentation:
+            [Logout Endpoint](http://developers.xstore.pro/documentation/#logout)
+        """
         await self._send_command_(self._writer, "logout")
         self._logged_in = False
 
     async def _send_and_read_command_(
         self, cmd: str, Type: DataClassJsonMixin | None, **kwargs
     ):
+        """
+        Send a command to the API and read the response.
+
+        Args:
+            cmd (str): The command to send.
+            Type (DataClassJsonMixin | None): The data class type for parsing the response.
+            **kwargs: Additional keyword arguments for the command.
+
+        Returns:
+            Parsed response data based on the provided Type.
+        """
         await self._send_command_(self._writer, cmd, **kwargs)
         data = await self._read_command_(self._reader)
         if not Type:
@@ -252,9 +338,16 @@ class Api:
 
     async def get_all_symbols(self, **kwargs) -> list[SymbolRecord]:
         """
-        Description: Returns array of all symbols available for the user.
+        Retrieve all available trading symbols for the user.
 
-        [http://developers.xstore.pro/documentation/#getAllSymbols](http://developers.xstore.pro/documentation/#getAllSymbols)
+        Args:
+            **kwargs: Additional keyword arguments for the command.
+
+        Returns:
+            list[SymbolRecord]: A list of symbol records available to the user.
+
+        Documentation:
+            [Get All Symbols](http://developers.xstore.pro/documentation/#getAllSymbols)
         """
         return await self._send_and_read_command_(
             "getAllSymbols", SymbolRecord, **kwargs
@@ -262,9 +355,13 @@ class Api:
 
     async def get_calendar(self, **kwargs) -> list[CalendarRecord]:
         """
-        Description: Returns calendar with market events.
+        Retrieve market events calendar.
 
-        [http://developers.xstore.pro/documentation/#getCalendar](http://developers.xstore.pro/documentation/#getCalendar)
+        Args:
+            **kwargs: Additional keyword arguments for the command.
+
+        Returns:
+            list[CalendarRecord]: A list of calendar records with market events.
         """
         return await self._send_and_read_command_(
             "getCalendar", CalendarRecord, **kwargs
@@ -274,23 +371,29 @@ class Api:
         self, info: ChartLastInfoRecord, **kwargs
     ) -> ChartResponseRecord:
         """
-        Description: Please note that this function can be usually replaced by its streaming equivalent getCandles which is the preferred way of retrieving current candle data. Returns chart info, from start date to the current time. If the chosen period of CHART_LAST_INFO_RECORD  is greater than 1 minute, the last candle returned by the API can change until the end of the period (the candle is being automatically updated every minute).
+        Retrieve the latest chart information based on the provided criteria.
 
-        Limitations: there are limitations in charts data availability. Detailed ranges for charts data, what can be accessed with specific period, are as follows:
+        Description:
+            Please note that this function can usually be replaced by its streaming equivalent `getCandles`,
+            which is the preferred method for retrieving current candle data. Returns chart info from the
+            start date to the current time. If the chosen period of `CHART_LAST_INFO_RECORD` is greater
+            than 1 minute, the last candle returned by the API can change until the end of the period
+            (the candle is automatically updated every minute).
 
-        PERIOD_M1 --- <0-1) month, i.e. one month time</br>
-        PERIOD_M30 --- <1-7) month, six months time</br>
-        PERIOD_H4 --- <7-13) month, six months time</br>
-        PERIOD_D1 --- 13 month, and earlier on</br>
+        Limitations:
+            - `PERIOD_M1`: <0-1) month
+            - `PERIOD_M30`: <1-7) months
+            - `PERIOD_H4`: <7-13) months
+            - `PERIOD_D1`: 13 months and earlier
 
-        Note, that specific PERIOD_ is the lowest (i.e. the most detailed) period, accessible in listed range. For instance, in months range <1-7) you can access periods: PERIOD_M30, PERIOD_H1, PERIOD_H4, PERIOD_D1, PERIOD_W1, PERIOD_MN1. Specific data ranges availability is guaranteed, however those ranges may be wider, e.g.: PERIOD_M1 may be accessible for 1.5 months back from now, where 1.0 months is guaranteed.
+            Specific periods are guaranteed within their ranges but may extend slightly beyond.
 
-        Example scenario:
+        Example Scenario:
+            - Request charts of 5-minute period for a 3-month time span.
+            - Response guarantees 1 month of 5-minute charts.
 
-        * request charts of 5 minutes period, for 3 months time span, back from now;
-        * response: you are guaranteed to get 1 month of 5 minutes charts; because, 5 minutes period charts are not accessible 2 months and 3 months back from now.
-
-        [http://developers.xstore.pro/documentation/#getChartLastRequest](http://developers.xstore.pro/documentation/#getChartLastRequest)
+        Documentation:
+            [Get Chart Last Request](http://developers.xstore.pro/documentation/#getChartLastRequest)
         """
         return await self._send_and_read_command_(
             "getChartLastRequest",
@@ -512,9 +615,14 @@ class Api:
         self, symbols: list[str], **kwargs
     ) -> list[TradingHoursRecord]:
         """
-        Description: Returns quotes and trading times.
+        Retrieve trading hours for specified symbols.
 
-        [http://developers.xstore.pro/documentation/#getTradingHours](http://developers.xstore.pro/documentation/#getTradingHours)
+        Args:
+            symbols (list[str]): List of symbol names to retrieve trading hours for.
+            **kwargs: Additional keyword arguments for the command.
+
+        Returns:
+            list[TradingHoursRecord]: A list of trading hours records for the specified symbols.
         """
         return await self._send_and_read_command_(
             "getTradingHours",
@@ -525,9 +633,13 @@ class Api:
 
     async def get_version(self, **kwargs) -> VersionRecord:
         """
-        Description: Returns the current API version.
+        Retrieve the API version.
 
-        [http://developers.xstore.pro/documentation/#getVersion](http://developers.xstore.pro/documentation/#getVersion)
+        Args:
+            **kwargs: Additional keyword arguments for the command.
+
+        Returns:
+            VersionRecord: The API version information.
         """
         return await self._send_and_read_command_(
             "getVersion",
@@ -537,9 +649,10 @@ class Api:
 
     async def ping(self, **kwargs) -> None:
         """
-        Description: Regularly calling this function is enough to refresh the internal state of all the components in the system. It is recommended that any application that does not execute other commands, should call this command at least once every 10 minutes. Please note that the streaming counterpart of this function is combination of ping  and getKeepAlive .
+        Send a ping to the API to keep the connection alive.
 
-        [http://developers.xstore.pro/documentation/#ping](http://developers.xstore.pro/documentation/#ping)
+        Args:
+            **kwargs: Additional keyword arguments for the command.
         """
         return await self._send_and_read_command_(
             "ping",
@@ -551,9 +664,14 @@ class Api:
         self, tradeTransInfo: TradeTransInfoRecord, **kwargs
     ) -> TradeTransResponseRecord:
         """
-        Description: Starts trade transaction. tradeTransaction sends main transaction information to the server.
+        Execute a trade transaction.
 
-        [http://developers.xstore.pro/documentation/#tradeTransaction](http://developers.xstore.pro/documentation/#tradeTransaction)
+        Args:
+            tradeTransInfo (TradeTransInfoRecord): Information about the trade transaction.
+            **kwargs: Additional keyword arguments for the command.
+
+        Returns:
+            TradeTransResponseRecord: Response from the trade transaction.
         """
         return await self._send_and_read_command_(
             "tradeTransaction",
@@ -566,9 +684,14 @@ class Api:
         self, order: int, **kwargs
     ) -> TradeTransactionStatusResponseRecord:
         """
-        Description: Please note that this function can be usually replaced by its streaming equivalent getTradeStatus  which is the preferred way of retrieving transaction status data. Returns current transaction status. At any time of transaction processing client might check the status of transaction on server side. In order to do that client must provide unique order taken from tradeTransaction  invocation.
+        Retrieve the status of a trade transaction.
 
-        [http://developers.xstore.pro/documentation/#tradeTransactionStatus](http://developers.xstore.pro/documentation/#tradeTransactionStatus)
+        Args:
+            order (int): The order ID to check the status for.
+            **kwargs: Additional keyword arguments for the command.
+
+        Returns:
+            TradeTransactionStatusResponseRecord: The status of the trade transaction.
         """
         return await self._send_and_read_command_(
             "tradeTransactionStatus",
@@ -584,7 +707,15 @@ class Api:
         eventListener: Callable[[T], None],
         **kwargs,
     ):
-        """Subscribe to event and register event listener"""
+        """
+        Subscribe to a specific API command for real-time updates.
+
+        Args:
+            command (str): The API command to subscribe to.
+            Type (DataClassJsonMixin | None): The data class type for parsing the response.
+            eventListener (Callable[[T], None]): The callback function to handle events.
+            **kwargs: Additional keyword arguments for the subscription.
+        """
         self._callbacks[command].append(
             lambda data: eventListener(Type.from_dict(data)) if Type else eventListener
         )
@@ -601,8 +732,13 @@ class Api:
         return unsubscribe_fn
 
     async def _unsubscribe_(self, command: str, **kwargs):
-        """Remove event listener and unsubscribe from event"""
+        """
+        Unsubscribe from a specific API command.
 
+        Args:
+            command (str): The API command to unsubscribe from.
+            **kwargs: Additional keyword arguments for the unsubscription.
+        """
         del self._callbacks[command]
         await self._send_command_(
             self._streaming_writer,
@@ -615,9 +751,11 @@ class Api:
         self, eventListener: Callable[[StreamingBalanceRecord], None], **kwargs
     ):
         """
-        Description: Allows to get actual account indicators values in real-time, as soon as they are available in the system.
+        Subscribe to balance updates.
 
-        [http://developers.xstore.pro/documentation/#streamgetBalance](http://developers.xstore.pro/documentation/#streamgetBalance)
+        Args:
+            eventListener (Callable[[StreamingBalanceRecord], None]): Callback for balance updates.
+            **kwargs: Additional keyword arguments for the subscription.
         """
         return self._subscribe_(
             "balance", StreamingBalanceRecord, eventListener, **kwargs
@@ -630,9 +768,15 @@ class Api:
         **kwargs,
     ):
         """
-        Description: Subscribes for and unsubscribes from API chart candles. The interval of every candle is 1 minute. A new candle arrives every minute.
+        Subscribe to real-time candle data for a specific symbol.
 
-        [http://developers.xstore.pro/documentation/#streamgetCandles](http://developers.xstore.pro/documentation/#streamgetCandles)
+        Args:
+            eventListener (Callable[[StreamingCandleRecord], None]): Callback function to handle candle updates.
+            symbol (str): The trading symbol to subscribe to.
+            **kwargs: Additional keyword arguments for the subscription.
+
+        Returns:
+            Unsubscribe function to terminate the subscription.
         """
         return self._subscribe_(
             "candles", StreamingCandleRecord, eventListener, symbol=symbol, **kwargs
@@ -721,10 +865,7 @@ class Api:
 
     async def streaming_ping(self):
         """
-        Description: Description: Regularly calling this function is enough to refresh the internal state of all the components in the system. Streaming connection, when any command is not sent by client in the session, generates only one way network traffic. It is recommended that any application that does not execute other commands, should call this command at least once every 10 minutes.
-        Note: There is no response in return to this command.
-
-        [http://developers.xstore.pro/documentation/#streamping](http://developers.xstore.pro/documentation/#streamping)
+        Send a streaming ping to maintain the streaming session.
         """
         await self._send_command_(
             self._streaming_writer, "ping", streamSessionId=self._stream_session_id
