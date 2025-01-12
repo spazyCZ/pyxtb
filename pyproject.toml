@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyxtb"
-version = "1.0.1.rma"
+version = "1.0.1"
 description = "Python wrapper for XTB HTTP API"
 authors = ["Michal Karol <michal.p.karol@gmail.com>"]
 readme = "README.md"
