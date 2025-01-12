@@ -4,6 +4,7 @@ from typing import Literal, TypedDict, TypeVar
 
 from dataclasses_json import CatchAll, Undefined, dataclass_json
 
+
 T = TypeVar("T")
 Time = int
 

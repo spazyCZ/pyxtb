@@ -109,6 +109,7 @@ class Api:
         self._app_name = app_name
         self._address = address
         self._connection_info = Api._DEMO if demo else Api._REAL
+        
 
     async def __aenter__(self):
         """
@@ -190,6 +191,7 @@ class Api:
         Returns:
             Parsed response data or raw data based on the provided flag.
         """
+        
         data = await self._read_(reader)
         if len(data) > 0:
             parsed_data: RESPONSE[T] = json.loads(data)
@@ -231,7 +233,7 @@ class Api:
             ),
         )
 
-    async def _stream_read_(self):
+    async def _stream_read_(self): 
         """
         Reads streaming data from the API and triggers callbacks.
 
@@ -315,7 +317,7 @@ class Api:
         self._logged_in = False
 
     async def _send_and_read_command_(
-        self, cmd: str, Type: DataClassJsonMixin | None, **kwargs
+        self, cmd: str, Type: DataClassJsonMixin | None, as_json: bool = False, **kwargs
     ):
         """
         Send a command to the API and read the response.
@@ -323,91 +325,77 @@ class Api:
         Args:
             cmd (str): The command to send.
             Type (DataClassJsonMixin | None): The data class type for parsing the response.
+            as_json (bool, optional): If True, returns raw JSON/dict. Defaults to False.
             **kwargs: Additional keyword arguments for the command.
 
         Returns:
-            Parsed response data based on the provided Type.
+            Parsed response data or raw JSON/dict based on as_json.
         """
         await self._send_command_(self._writer, cmd, **kwargs)
         data = await self._read_command_(self._reader)
+        if as_json:
+            return data
+
         if not Type:
             return data
 
         return (
             Type.from_dict(data)
-            if type(data) is not list
+            if isinstance(data, dict)
             else [Type.from_dict(el) for el in data]
         )
 
-    async def get_all_symbols(self, **kwargs) -> list[SymbolRecord]:
+    async def get_all_symbols(self, as_json: bool = False, **kwargs) -> list[SymbolRecord] | dict:
         """
         Retrieve all available trading symbols for the user.
 
         Args:
+            as_json (bool, optional): If True, returns raw JSON/dict. Defaults to False.
             **kwargs: Additional keyword arguments for the command.
 
         Returns:
-            list[SymbolRecord]: A list of symbol records available to the user.
-
-        Documentation:
-            [Get All Symbols](http://developers.xstore.pro/documentation/#getAllSymbols)
+            list[SymbolRecord] | dict: A list of symbol records or raw JSON/dict.
         """
-        return await self._send_and_read_command_(
-            "getAllSymbols", SymbolRecord, **kwargs
-        )
+        return await self._send_and_read_command_("getAllSymbols", SymbolRecord, as_json=as_json, **kwargs)
 
-    async def get_calendar(self, **kwargs) -> list[CalendarRecord]:
+    async def get_calendar(self, as_json: bool = False, **kwargs) -> list[CalendarRecord] | dict:
         """
         Retrieve market events calendar.
 
         Args:
+            as_json (bool, optional): If True, returns raw JSON/dict. Defaults to False.
             **kwargs: Additional keyword arguments for the command.
 
         Returns:
-            list[CalendarRecord]: A list of calendar records with market events.
+            list[CalendarRecord] | dict: A list of calendar records or raw JSON/dict.
         """
-        return await self._send_and_read_command_(
-            "getCalendar", CalendarRecord, **kwargs
-        )
+        return await self._send_and_read_command_("getCalendar", CalendarRecord, as_json=as_json, **kwargs)
 
     async def get_chart_last_request(
-        self, info: ChartLastInfoRecord, **kwargs
-    ) -> ChartResponseRecord:
+        self, info: ChartLastInfoRecord, as_json: bool = False, **kwargs
+    ) -> ChartResponseRecord | dict:
         """
         Retrieve the latest chart information based on the provided criteria.
 
-        Description:
-            Please note that this function can usually be replaced by its streaming equivalent `getCandles`,
-            which is the preferred method for retrieving current candle data. Returns chart info from the
-            start date to the current time. If the chosen period of `CHART_LAST_INFO_RECORD` is greater
-            than 1 minute, the last candle returned by the API can change until the end of the period
-            (the candle is automatically updated every minute).
+        Args:
+            info (ChartLastInfoRecord): Chart information.
+            as_json (bool, optional): If True, returns raw JSON/dict. Defaults to False.
+            **kwargs: Additional keyword arguments for the command.
 
-        Limitations:
-            - `PERIOD_M1`: <0-1) month
-            - `PERIOD_M30`: <1-7) months
-            - `PERIOD_H4`: <7-13) months
-            - `PERIOD_D1`: 13 months and earlier
-
-            Specific periods are guaranteed within their ranges but may extend slightly beyond.
-
-        Example Scenario:
-            - Request charts of 5-minute period for a 3-month time span.
-            - Response guarantees 1 month of 5-minute charts.
-
-        Documentation:
-            [Get Chart Last Request](http://developers.xstore.pro/documentation/#getChartLastRequest)
+        Returns:
+            ChartResponseRecord | dict: Chart response record or raw JSON/dict.
         """
         return await self._send_and_read_command_(
             "getChartLastRequest",
             ChartResponseRecord,
+            as_json=as_json,
             arguments=dict(info=info.to_dict()),
             **kwargs,
         )
 
     async def get_chart_range_request(
-        self, info: ChartRangeInfoRecord, **kwargs
-    ) -> ChartResponseRecord:
+        self, info: ChartRangeInfoRecord, as_json: bool = False, **kwargs
+    ) -> ChartResponseRecord | dict:
         """
         Description: Please note that this function can be usually replaced by its streaming equivalent getCandles which is the preferred way of retrieving current candle data. Returns chart info with data between given start and end dates.
 
@@ -425,13 +413,14 @@ class Api:
         return await self._send_and_read_command_(
             "getChartRangeRequest",
             ChartResponseRecord,
+            as_json=as_json,
             arguments=dict(info=info.to_dict()),
             **kwargs,
         )
 
     async def get_commission_def(
-        self, symbol: str, volume: float, **kwargs
-    ) -> CommissionDefResponseRecord:
+        self, symbol: str, volume: float, as_json: bool = False, **kwargs
+    ) -> CommissionDefResponseRecord | dict:
         """
         Description: Returns calculation of commission and rate of exchange. The value is calculated as expected value, and therefore might not be perfectly accurate.
 
@@ -440,43 +429,54 @@ class Api:
         return await self._send_and_read_command_(
             "getCommissionDef",
             CommissionDefResponseRecord,
+            as_json=as_json,
             arguments=dict(symbol=symbol, volume=volume),
             **kwargs,
         )
 
-    async def get_current_user_data(self, **kwargs) -> CurrentUserDataRecord:
+    async def get_current_user_data(self, as_json: bool = False, **kwargs) -> CurrentUserDataRecord | dict:
         """
         Description: Returns calculation of commission and rate of exchange. The value is calculated as expected value, and therefore might not be perfectly accurate.
 
         [http://developers.xstore.pro/documentation/#getCurrentUserData](http://developers.xstore.pro/documentation/#getCurrentUserData)
         """
         return await self._send_and_read_command_(
-            "getCurrentUserData", CurrentUserDataRecord, **kwargs
+            "getCurrentUserData",
+            CurrentUserDataRecord,
+            as_json=as_json,
+            **kwargs,
         )
 
-    async def get_ibs_history(self, end: Time, start: Time, **kwargs) -> list[IBRecord]:
+    async def get_ibs_history(self, end: Time, start: Time, as_json: bool = False, **kwargs) -> list[IBRecord] | dict:
         """
         Description: Returns IBs data from the given time range.
 
         [http://developers.xstore.pro/documentation/#getIbsHistory](http://developers.xstore.pro/documentation/#getIbsHistory)
         """
         return await self._send_and_read_command_(
-            "getIbsHistory", IBRecord, arguments=dict(end=end, start=start), **kwargs
+            "getIbsHistory",
+            IBRecord,
+            as_json=as_json,
+            arguments=dict(end=end, start=start),
+            **kwargs,
         )
 
-    async def get_margin_level(self, **kwargs) -> MarginLevelRecord:
+    async def get_margin_level(self, as_json: bool = False, **kwargs) -> MarginLevelRecord | dict:
         """
         Description: Please note that this function can be usually replaced by its streaming equivalent getBalance which is the preferred way of retrieving account indicators. Returns various account indicators.
 
         [http://developers.xstore.pro/documentation/#getMarginLevel](http://developers.xstore.pro/documentation/#getMarginLevel)
         """
         return await self._send_and_read_command_(
-            "getMarginLevel", MarginLevelRecord, **kwargs
+            "getMarginLevel",
+            MarginLevelRecord,
+            as_json=as_json,
+            **kwargs,
         )
 
     async def get_margin_trade(
-        self, symbol: str, volume: float, **kwargs
-    ) -> MarginTradeRecord:
+        self, symbol: str, volume: float, as_json: bool = False, **kwargs
+    ) -> MarginTradeRecord | dict:
         """
         Description: Returns expected margin for given instrument and volume. The value is calculated as expected margin value, and therefore might not be perfectly accurate.
 
@@ -485,20 +485,25 @@ class Api:
         return await self._send_and_read_command_(
             "getMarginTrade",
             MarginTradeRecord,
+            as_json=as_json,
             arguments=dict(symbol=symbol, volume=volume),
             **kwargs,
         )
 
     async def get_news(
-        self, start: Time, end: Time = 0, **kwargs
-    ) -> list[NewsTopicRecord]:
+        self, start: Time, end: Time = 0, as_json: bool = False, **kwargs
+    ) -> list[NewsTopicRecord] | dict:
         """
         Description: Please note that this function can be usually replaced by its streaming equivalent getNews which is the preferred way of retrieving news data. Returns news from trading server which were sent within specified period of time.
 
         [http://developers.xstore.pro/documentation/#getNews](http://developers.xstore.pro/documentation/#getNews)
         """
         return await self._send_and_read_command_(
-            "getNews", NewsTopicRecord, arguments=dict(end=end, start=start), **kwargs
+            "getNews",
+            NewsTopicRecord,
+            as_json=as_json,
+            arguments=dict(end=end, start=start),
+            **kwargs,
         )
 
     async def get_profit_calculation(
@@ -508,8 +513,9 @@ class Api:
         openPrice: float,
         symbol: str,
         volume: float,
+        as_json: bool = False,
         **kwargs,
-    ) -> ProfitCalculationRecord:
+    ) -> ProfitCalculationRecord | dict:
         """
         Description: Calculates estimated profit for given deal data Should be used for calculator-like apps only. Profit for opened transactions should be taken from server, due to higher precision of server calculation.
 
@@ -518,6 +524,7 @@ class Api:
         return await self._send_and_read_command_(
             "getProfitCalculation",
             ProfitCalculationRecord,
+            as_json=as_json,
             arguments=dict(
                 closePrice=closePrice,
                 cmd=cmd,
@@ -528,39 +535,52 @@ class Api:
             **kwargs,
         )
 
-    async def get_server_time(self, **kwargs) -> ServerTimeRecord:
+    async def get_server_time(self, as_json: bool = False, **kwargs) -> ServerTimeRecord | dict:
         """
         Description: Returns current time on trading server.
 
         [http://developers.xstore.pro/documentation/#getServerTime](http://developers.xstore.pro/documentation/#getServerTime)
         """
         return await self._send_and_read_command_(
-            "getServerTime", ServerTimeRecord, **kwargs
+            "getServerTime",
+            ServerTimeRecord,
+            as_json=as_json,
+            **kwargs,
         )
 
-    async def get_step_rules(self, **kwargs) -> list[StepRuleRecord]:
+    async def get_step_rules(self, as_json: bool = False, **kwargs) -> list[StepRuleRecord] | dict:
         """
-        Description: Returns a list of step rules for DMAs.
+        Retrieve step rules.
 
-        [http://developers.xstore.pro/documentation/#getStepRules](http://developers.xstore.pro/documentation/#getStepRules)
+        Args:
+            as_json (bool, optional): If True, returns raw JSON/dict. Defaults to False.
+            **kwargs: Additional keyword arguments for the command.
+
+        Returns:
+            list[StepRuleRecord] | dict: A list of step rule records or raw JSON/dict.
         """
-        return await self._send_and_read_command_(
-            "getStepRules", StepRuleRecord, **kwargs
-        )
+        response = await self._send_and_read_command_("getStepRules", StepRuleRecord, as_json=as_json, **kwargs)
+        if as_json and not response:
+            return {"status": True, "returnData": []}
+        return response
 
-    async def get_symbol(self, symbol: str, **kwargs) -> SymbolRecord:
+    async def get_symbol(self, symbol: str, as_json: bool = False, **kwargs) -> SymbolRecord | dict:
         """
         Description: Returns information about symbol available for the user.
 
         [http://developers.xstore.pro/documentation/#getSymbol](http://developers.xstore.pro/documentation/#getSymbol)
         """
         return await self._send_and_read_command_(
-            "getSymbol", SymbolRecord, arguments=dict(symbol=symbol), **kwargs
+            "getSymbol",
+            SymbolRecord,
+            as_json=as_json,
+            arguments=dict(symbol=symbol),
+            **kwargs,
         )
 
     async def get_tick_prices(
-        self, level: int, symbols: list[str], timestamp: Time, **kwargs
-    ) -> TickPricesResponseRecord:
+        self, level: int, symbols: list[str], timestamp: Time, as_json: bool = False, **kwargs
+    ) -> TickPricesResponseRecord | dict:
         """
         Description: Please note that this function can be usually replaced by its streaming equivalent getTickPrices which is the preferred way of retrieving ticks data. Returns array of current quotations for given symbols, only quotations that changed from given timestamp are returned. New timestamp obtained from output will be used as an argument of the next call of this command.
 
@@ -569,11 +589,12 @@ class Api:
         return await self._send_and_read_command_(
             "getTickPrices",
             TickPricesResponseRecord,
+            as_json=as_json,
             arguments=dict(level=level, symbols=symbols, timestamp=timestamp),
             **kwargs,
         )
 
-    async def get_trade_records(self, orders: list[int], **kwargs) -> list[TradeRecord]:
+    async def get_trade_records(self, orders: list[int], as_json: bool = False, **kwargs) -> list[TradeRecord] | dict:
         """
         Description: Returns array of trades listed in orders argument.
 
@@ -582,26 +603,30 @@ class Api:
         return await self._send_and_read_command_(
             "getTradeRecords",
             TradeRecord,
+            as_json=as_json,
             arguments=dict(orders=orders),
             **kwargs,
         )
 
-    async def get_trades(self, openedOnly: bool, **kwargs) -> list[TradeRecord]:
+    async def get_trades(self, openedOnly: bool, as_json: bool = False, **kwargs) -> list[TradeRecord] | dict:
         """
         Description: Please note that this function can be usually replaced by its streaming equivalent getTrades  which is the preferred way of retrieving trades data. Returns array of user's trades.
 
         [http://developers.xstore.pro/documentation/#getTrades](http://developers.xstore.pro/documentation/#getTrades)
         """
-        return await self._send_and_read_command_(
+        response = await self._send_and_read_command_(
             "getTrades",
             TradeRecord,
+            as_json=as_json,
             arguments=dict(openedOnly=openedOnly),
-            **kwargs,
-        )
+            **kwargs)
+        print (response)
+        return response
+        
 
     async def get_trades_history(
-        self, start: int, end: int = 0, **kwargs
-    ) -> list[TradeRecord]:
+        self, start: int, end: int = 0, as_json: bool = False, **kwargs
+    ) -> list[TradeRecord] | dict:
         """
         Description: Please note that this function can be usually replaced by its streaming equivalent getTrades  which is the preferred way of retrieving trades data. Returns array of user's trades which were closed within specified period of time.
 
@@ -610,95 +635,109 @@ class Api:
         return await self._send_and_read_command_(
             "getTradesHistory",
             TradeRecord,
+            as_json=as_json,
             arguments=dict(start=start, end=end),
             **kwargs,
         )
 
     async def get_trading_hours(
-        self, symbols: list[str], **kwargs
-    ) -> list[TradingHoursRecord]:
+        self, symbols: list[str], as_json: bool = False, **kwargs
+    ) -> list[TradingHoursRecord] | dict:
         """
         Retrieve trading hours for specified symbols.
 
         Args:
             symbols (list[str]): List of symbol names to retrieve trading hours for.
+            as_json (bool, optional): If True, returns raw JSON/dict. Defaults to False.
             **kwargs: Additional keyword arguments for the command.
 
         Returns:
-            list[TradingHoursRecord]: A list of trading hours records for the specified symbols.
+            list[TradingHoursRecord] | dict: A list of trading hours records or raw JSON/dict.
         """
         return await self._send_and_read_command_(
             "getTradingHours",
             TradingHoursRecord,
+            as_json=as_json,
             arguments=dict(symbols=symbols),
             **kwargs,
         )
 
-    async def get_version(self, **kwargs) -> VersionRecord:
+    async def get_version(self, as_json: bool = False, **kwargs) -> VersionRecord | dict:
         """
         Retrieve the API version.
 
         Args:
+            as_json (bool, optional): If True, returns raw JSON/dict. Defaults to False.
             **kwargs: Additional keyword arguments for the command.
 
         Returns:
-            VersionRecord: The API version information.
+            VersionRecord | dict: The API version information or raw JSON/dict.
         """
         return await self._send_and_read_command_(
             "getVersion",
             VersionRecord,
+            as_json=as_json,
             **kwargs,
         )
 
-    async def ping(self, **kwargs) -> None:
+    async def ping(self, as_json: bool = False, **kwargs) -> None | dict:
         """
         Send a ping to the API to keep the connection alive.
 
         Args:
+            as_json (bool, optional): If True, returns raw JSON/dict. Defaults to False.
             **kwargs: Additional keyword arguments for the command.
+
+        Returns:
+            None | dict: None or raw JSON/dict.
         """
         return await self._send_and_read_command_(
             "ping",
             None,
+            as_json=as_json,
             **kwargs,
         )
 
     async def trade_transaction(
-        self, tradeTransInfo: TradeTransInfoRecord, **kwargs
-    ) -> TradeTransResponseRecord:
+        self, tradeTransInfo: TradeTransInfoRecord, as_json: bool = False, **kwargs
+    ) -> TradeTransResponseRecord | dict:
         """
         Execute a trade transaction.
 
         Args:
             tradeTransInfo (TradeTransInfoRecord): Information about the trade transaction.
+            as_json (bool, optional): If True, returns raw JSON/dict. Defaults to False.
             **kwargs: Additional keyword arguments for the command.
 
         Returns:
-            TradeTransResponseRecord: Response from the trade transaction.
+            TradeTransResponseRecord | dict: Response from the trade transaction or raw JSON/dict.
         """
         return await self._send_and_read_command_(
             "tradeTransaction",
             TradeTransResponseRecord,
+            as_json=as_json,
             arguments=dict(tradeTransInfo=tradeTransInfo.to_dict()),
             **kwargs,
         )
 
     async def trade_transaction_status(
-        self, order: int, **kwargs
-    ) -> TradeTransactionStatusResponseRecord:
+        self, order: int, as_json: bool = False, **kwargs
+    ) -> TradeTransactionStatusResponseRecord | dict:
         """
         Retrieve the status of a trade transaction.
 
         Args:
             order (int): The order ID to check the status for.
+            as_json (bool, optional): If True, returns raw JSON/dict. Defaults to False.
             **kwargs: Additional keyword arguments for the command.
 
         Returns:
-            TradeTransactionStatusResponseRecord: The status of the trade transaction.
+            TradeTransactionStatusResponseRecord | dict: The status of the trade transaction or raw JSON/dict.
         """
         return await self._send_and_read_command_(
             "tradeTransactionStatus",
             TradeTransactionStatusResponseRecord,
+            as_json=as_json,
             arguments=dict(order=order),
             **kwargs,
         )
@@ -873,3 +912,12 @@ class Api:
         await self._send_command_(
             self._streaming_writer, "ping", streamSessionId=self._stream_session_id
         )
+
+    async def is_logged_in(self) -> bool:
+        """
+        Verify if the user is currently logged in.
+
+        Returns:
+            bool: True if the user is logged in, False otherwise.
+        """
+        return self._logged_in
